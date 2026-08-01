@@ -1,0 +1,632 @@
+/* ============ Investment Monitoring System — PT Kayaba ============ */
+/* Frontend terhubung database via api.php (PHP + MySQL) */
+
+const ICONS = {
+  executive: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  progress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+  budget: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  production: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  benefit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+  action: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+};
+
+const PAGES = [
+  { id: 'executive', label: 'Executive Dashboard', icon: 'executive' },
+  { id: 'progress',  label: 'Investment Progress', icon: 'progress' },
+  { id: 'budget',    label: 'Budget Monitoring', icon: 'budget' },
+  { id: 'production',label: 'Production Performance', icon: 'production' },
+  { id: 'benefit',   label: 'Benefit Dashboard', icon: 'benefit' },
+  { id: 'action',    label: 'Action Tracker', icon: 'action' }
+];
+
+const STAGES = ['Draft', 'Under Review', 'Ready for Approval', 'Approved', 'Fabrication', 'Install & Trial', 'PCR', 'MassPro'];
+
+const STAGE_COLOR = {
+  'Draft':              { bg: '#EEF0F3', fg: '#6B7280' },
+  'Under Review':       { bg: '#FDF1DF', fg: '#B57A12' },
+  'Ready for Approval': { bg: '#E8EFFA', fg: '#2F6DB3' },
+  'Approved':           { bg: '#E3F5EC', fg: '#1FA463' },
+  'Fabrication':        { bg: '#EDE8FB', fg: '#6C4FD1' },
+  'Install & Trial':    { bg: '#FDEAEE', fg: '#CE3E6B' },
+  'PCR':                { bg: '#FDF1DF', fg: '#B57A12' },
+  'MassPro':            { bg: '#FBEAEB', fg: '#D2232A' }
+};
+
+const PAY_MILESTONES = ['DP', 'Payment 1', 'Payment 2', 'Payment 3', 'Retention'];
+
+const ACTION_STATUS = {
+  'open':        { label: 'Open', color: '#D2232A' },
+  'in-progress': { label: 'In Progress', color: '#F2A33C' },
+  'done':        { label: 'Done', color: '#1FA463' }
+};
+
+const API = 'api.php';
+
+/* Data global — diisi dari database via API */
+let investments = [];
+let actions = [];
+
+/* ================= Helpers ================= */
+const $ = (sel, root) => (root || document).querySelector(sel);
+
+function rupiah(n) {
+  return 'Rp ' + n.toLocaleString('id-ID');
+}
+
+function compact(n) {
+  if (n >= 1e9) return 'Rp ' + (n / 1e9).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' M';
+  if (n >= 1e6) return 'Rp ' + (n / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' Jt';
+  return rupiah(n);
+}
+
+function stageBadge(stage) {
+  const c = STAGE_COLOR[stage] || { bg: '#EEF0F3', fg: '#6B7280' };
+  return '<span class="badge" style="background:' + c.bg + ';color:' + c.fg + '">' + stage + '</span>';
+}
+
+function kpiOf(inv) {
+  if (!inv.fs_target || inv.fs_target <= 0) return null;
+  return Math.round((inv.fs_actual / inv.fs_target) * 100);
+}
+
+function statusOf(inv) {
+  const kpi = kpiOf(inv);
+  if (kpi !== null && kpi < 100) return { label: 'Underperforming', color: '#D2232A', bg: '#FBEAEB' };
+  if (kpi !== null && kpi >= 100) return { label: 'On Track', color: '#1FA463', bg: '#E3F5EC' };
+  if (inv.stage === 'MassPro' || inv.stage === 'PCR') return { label: 'Belum Dinilai', color: '#F2A33C', bg: '#FDF1DF' };
+  return { label: 'Berjalan', color: '#2F6DB3', bg: '#E8EFFA' };
+}
+
+function payDots(inv) {
+  return '<div class="pay-dots">' + PAY_MILESTONES.map(function (_, i) {
+    return '<span class="pay-dot' + (i < inv.pay_step ? ' on' : '') + '" title="' + PAY_MILESTONES[i] + '"></span>';
+  }).join('') + '</div>';
+}
+
+function progressBar(pct, cls) {
+  var p = Math.max(0, Math.min(100, pct));
+  return '<div class="progress ' + (cls || '') + '"><i style="width:' + p + '%"></i></div>';
+}
+
+function stepper(id, field, value, max) {
+  return '<div class="stepper">' +
+    '<button data-dec data-id="' + id + '" data-field="' + field + '" data-max="' + max + '">−</button>' +
+    '<span>' + value + '</span>' +
+    '<button data-inc data-id="' + id + '" data-field="' + field + '" data-max="' + max + '">+</button></div>';
+}
+
+/* ================= API ================= */
+function apiGet(r) {
+  return fetch(API + '?r=' + r).then(function (res) { return res.json(); });
+}
+
+function apiPost(r, data) {
+  return fetch(API + '?r=' + r, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function (res) { return res.json(); });
+}
+
+function loadData() {
+  return Promise.all([apiGet('investments'), apiGet('actions')]).then(function (res) {
+    investments = res[0];
+    actions = res[1];
+    renderAll();
+  }).catch(function (err) {
+    console.error(err);
+    document.querySelectorAll('.page').forEach(function (p) {
+      p.innerHTML = '<div class="card" style="text-align:center;padding:60px 22px;color:var(--red)">' +
+        '<h3>Gagal terhubung ke database</h3>' +
+        '<p style="color:var(--muted);font-size:13px">Pastikan MySQL berjalan & database sudah di-install. ' +
+        '<a href="install.php" style="color:var(--red)">Jalankan installer</a> lalu buka <a href="index.html" style="color:var(--red)">lagi</a>.</p></div>';
+    });
+  });
+}
+
+/* ================= Modal ================= */
+function openModal(title, bodyHtml) {
+  $('#modalTitle').textContent = title;
+  $('#modalBody').innerHTML = bodyHtml;
+  $('#modal').classList.add('show');
+}
+
+function closeModal() {
+  $('#modal').classList.remove('show');
+}
+
+/* ================= Navigation ================= */
+function buildNav() {
+  $('#nav').innerHTML = PAGES.map(function (p, i) {
+    return '<button class="nav-item' + (i === 0 ? ' active' : '') + '" data-page="' + p.id + '">' +
+      ICONS[p.icon] + '<span>' + p.label + '</span></button>';
+  }).join('');
+
+  document.querySelectorAll('.nav-item').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      go(btn.dataset.page);
+      closeSidebar();
+    });
+  });
+
+  $('#navToggle').addEventListener('click', function () {
+    $('#sidebar').classList.toggle('open');
+    $('#backdrop').classList.toggle('show');
+  });
+
+  $('#backdrop').addEventListener('click', closeSidebar);
+  $('#modalClose').addEventListener('click', closeModal);
+  $('#modal').addEventListener('click', function (e) {
+    if (e.target === e.currentTarget) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeModal();
+  });
+}
+
+function closeSidebar() {
+  $('#sidebar').classList.remove('open');
+  $('#backdrop').classList.remove('show');
+}
+
+function go(pageId) {
+  document.querySelectorAll('.nav-item').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.page === pageId);
+  });
+  document.querySelectorAll('.page').forEach(function (p) {
+    p.classList.toggle('is-active', p.id === 'page-' + pageId);
+  });
+  var pg = PAGES.filter(function (p) { return p.id === pageId; })[0];
+  $('#pageTitle').textContent = pg.label;
+}
+
+/* ================= Executive ================= */
+function renderExecutive() {
+  var total = investments.length;
+  var active = investments.filter(function (i) {
+    return ['Fabrication', 'Install & Trial', 'PCR', 'MassPro'].indexOf(i.stage) >= 0;
+  }).length;
+  var under = investments.filter(function (i) {
+    var k = kpiOf(i); return k !== null && k < 100;
+  });
+  var rated = investments.filter(function (i) { return kpiOf(i) !== null; });
+  var avgBenefit = rated.length
+    ? Math.round(rated.reduce(function (s, i) { return s + kpiOf(i); }, 0) / rated.length)
+    : 0;
+
+  var kpis = [
+    { icon: ICONS.executive, label: 'Total Investasi', value: total, note: 'Sepanjang tahun berjalan', c: '#FBEAEB', fg: '#D2232A' },
+    { icon: ICONS.progress, label: 'Investasi Aktif', value: active, note: 'Sedang berjalan / produksi', c: '#EDE8FB', fg: '#6C4FD1' },
+    { icon: ICONS.benefit, label: 'Underperforming', value: under.length, note: 'Perlu tindakan perbaikan', c: '#FDEAEE', fg: '#CE3E6B' },
+    { icon: ICONS.benefit, label: 'Realisasi Benefit', value: avgBenefit + '%', note: 'Rata-rata FS vs Actual', c: '#E3F5EC', fg: '#1FA463' }
+  ];
+
+  var html = '<div class="kpi-grid">' + kpis.map(function (k) {
+    return '<div class="card kpi">' +
+      '<div class="kpi-icon" style="background:' + k.c + ';color:' + k.fg + '">' + k.icon + '</div>' +
+      '<div><p class="kpi-label">' + k.label + '</p><h3 class="kpi-value">' + k.value + '</h3>' +
+      '<p class="kpi-note">' + k.note + '</p></div></div>';
+  }).join('') + '</div>';
+
+  var counts = {};
+  STAGES.forEach(function (s) { counts[s] = 0; });
+  investments.forEach(function (i) { counts[i.stage] = (counts[i.stage] || 0) + 1; });
+  var activeIdx = Math.max(0, STAGES.indexOf('Fabrication'));
+
+  var pipe = '<div class="pipeline">' + STAGES.map(function (s, idx) {
+    var c = STAGE_COLOR[s];
+    return '<div class="pipe' + (idx >= activeIdx && counts[s] > 0 ? ' hl' : '') + '"' +
+      ' style="background:' + c.bg + ';border-color:' + c.fg + '22">' +
+      '<b style="color:' + c.fg + '">' + (counts[s] || 0) + '</b><span>' + s + '</span></div>';
+  }).join('') + '</div>';
+
+  var groups = [
+    { label: 'Produksi (MassPro)', val: counts['MassPro'], color: '#D2232A' },
+    { label: 'Dalam Proses', val: counts['Fabrication'] + counts['Install & Trial'] + counts['PCR'], color: '#17181C' },
+    { label: 'Menunggu Persetujuan', val: counts['Draft'] + counts['Under Review'] + counts['Ready for Approval'] + counts['Approved'], color: '#C7CBD1' }
+  ];
+  var acc = 0;
+  var stops = groups.map(function (g) {
+    var start = acc; acc += g.val / total * 100;
+    return g.color + ' ' + start + '% ' + acc + '%';
+  });
+  var donut = '<div class="donut" style="background:conic-gradient(' + stops.join(',') + ')">' +
+    '<div class="donut-num"><b>' + total + '</b><span>Total Investasi</span></div></div>';
+  var legend = '<div class="legend">' + groups.map(function (g) {
+    return '<div class="legend-item"><span class="swatch" style="background:' + g.color + '"></span>' + g.label +
+      '<b>' + g.val + '</b></div>';
+  }).join('') + '</div>';
+
+  var rows = investments.slice().reverse().map(function (i) {
+    var st = statusOf(i);
+    return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
+      '<td><span class="cell-name">' + i.name + '</span><br><span class="cell-sub">PIC: ' + i.pic + '</span></td>' +
+      '<td>' + stageBadge(i.stage) + '</td>' +
+      '<td class="num">' + compact(i.budget) + '</td>' +
+      '<td class="num">' + (kpiOf(i) !== null ? kpiOf(i) + '%' : '—') + '</td>' +
+      '<td><span class="badge" style="background:' + st.bg + ';color:' + st.color + '">' + st.label + '</span></td></tr>';
+  }).join('');
+
+  $('#page-executive').innerHTML = html +
+    '<div class="grid-2">' +
+    '<div class="card"><h3><span class="accent"></span>Pipeline Tahapan Investasi</h3>' + pipe + '</div>' +
+    '<div class="card"><h3><span class="accent"></span>Distribusi Status</h3><div class="donut-wrap">' + donut + legend + '</div></div>' +
+    '</div>' +
+    '<div class="card"><h3><span class="accent"></span>Daftar Investasi' +
+    '<span class="right"><button class="btn" id="btnAddInv">' + ICONS.plus + 'Tambah Investasi</button></span></h3>' +
+    '<div class="table-wrap"><table class="table"><thead><tr>' +
+    '<th>ID</th><th>Investasi</th><th>Tahap</th><th class="num">Budget</th><th class="num">Capaian</th><th>Status</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+
+  $('#btnAddInv').addEventListener('click', showAddInvestment);
+}
+
+function stageSelect(inv) {
+  return '<select class="status-select stage-select" data-id="' + inv.id + '">' +
+    STAGES.map(function (s) {
+      return '<option value="' + s + '"' + (s === inv.stage ? ' selected' : '') + '>' + s + '</option>';
+    }).join('') + '</select>';
+}
+
+/* ================= Investment Progress ================= */
+function renderProgress() {
+  var counts = {};
+  investments.forEach(function (i) { counts[i.stage] = (counts[i.stage] || 0) + 1; });
+
+  var chips = STAGES.map(function (s) {
+    var c = STAGE_COLOR[s];
+    return '<div class="chip"><span class="sw" style="background:' + c.fg + '"></span>' + s + ' <b>' + (counts[s] || 0) + '</b></div>';
+  }).join('');
+
+  var cards = investments.map(function (i) {
+    var pct = Math.round((i.used / i.budget) * 100);
+    var st = statusOf(i);
+    return '<div class="card inv-card">' +
+      '<div class="inv-head">' + stageSelect(i) + '<span class="inv-id">' + i.code + '</span></div>' +
+      '<h4>' + i.name + '</h4>' +
+      '<p class="inv-meta">PIC: ' + i.pic + ' · ' + i.category + '</p>' +
+      '<div class="progress-label"><span>Progres Investasi</span><b>' + i.invest_progress + '%</b></div>' +
+      progressBar(i.invest_progress) +
+      '<div class="inv-stepper"><span class="lbl">Atur progres</span>' +
+      stepper(i.id, 'invest_progress', i.invest_progress + '%', 100) + '</div>' +
+      '<div class="progress-label" style="margin-top:14px"><span>Penyerapan Budget</span><b>' + pct + '%</b></div>' +
+      progressBar(pct) +
+      '<div class="inv-stats">' +
+      '<div class="inv-stat"><span>Total Budget</span><b>' + compact(i.budget) + '</b></div>' +
+      '<div class="inv-stat"><span>Status</span><b style="color:' + st.color + '">' + st.label + '</b></div>' +
+      '</div></div>';
+  }).join('');
+
+  $('#page-progress').innerHTML =
+    '<div class="chips">' + chips + '</div>' +
+    '<div class="inv-grid">' + cards + '</div>';
+}
+
+/* ================= Budget Monitoring ================= */
+function renderBudget() {
+  var totalBudget = investments.reduce(function (s, i) { return s + i.budget; }, 0);
+  var totalUsed = investments.reduce(function (s, i) { return s + i.used; }, 0);
+  var remain = totalBudget - totalUsed;
+  var closed = investments.filter(function (i) { return i.invest_progress >= 100; }).length;
+  var pctUsed = Math.round((totalUsed / totalBudget) * 100);
+
+  var kpis = [
+    { icon: ICONS.budget, label: 'Total Budget', value: compact(totalBudget), note: 'Seluruh investasi', c: '#FBEAEB', fg: '#D2232A' },
+    { icon: ICONS.budget, label: 'Budget Terpakai', value: compact(totalUsed), note: pctUsed + '% dari total', c: '#E8EFFA', fg: '#2F6DB3' },
+    { icon: ICONS.budget, label: 'Sisa Budget', value: compact(remain), note: 'Belum direalisasi', c: '#E3F5EC', fg: '#1FA463' },
+    { icon: ICONS.executive, label: 'Investasi Tuntas', value: closed, note: 'Progres 100%', c: '#EDE8FB', fg: '#6C4FD1' }
+  ];
+
+  var kpiHtml = '<div class="kpi-grid">' + kpis.map(function (k) {
+    return '<div class="card kpi">' +
+      '<div class="kpi-icon" style="background:' + k.c + ';color:' + k.fg + '">' + k.icon + '</div>' +
+      '<div><p class="kpi-label">' + k.label + '</p><h3 class="kpi-value">' + k.value + '</h3>' +
+      '<p class="kpi-note">' + k.note + '</p></div></div>';
+  }).join('') + '</div>';
+
+  var rows = investments.map(function (i) {
+    var pct = Math.round((i.used / i.budget) * 100);
+    return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
+      '<td><span class="cell-name">' + i.name + '</span><br><span class="cell-sub">' + i.pic + '</span></td>' +
+      '<td class="num">' + compact(i.budget) + '</td>' +
+      '<td class="num">' + compact(i.used) + '</td>' +
+      '<td style="min-width:140px">' + progressBar(pct) + '<span class="cell-sub" style="display:block;margin-top:5px">' + pct + '%</span></td>' +
+      '<td><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">' + payDots(i) +
+      stepper(i.id, 'pay_step', i.pay_step + '/5', 5) + '</div></td>' +
+      '<td>' + stageBadge(i.stage) + '</td></tr>';
+  }).join('');
+
+  $('#page-budget').innerHTML = kpiHtml +
+    '<div class="card"><h3><span class="accent"></span>Rincian Budget &amp; Progress Pembayaran' +
+    '<span class="right">5 milestone: DP · Payment 1–3 · Retention</span></h3>' +
+    '<div class="table-wrap"><table class="table"><thead><tr>' +
+    '<th>ID</th><th>Investasi</th><th class="num">Budget</th><th class="num">Terpakai</th><th>Penyerapan</th><th>Pembayaran</th><th>Tahap</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+}
+
+/* ================= Production Performance ================= */
+function renderProduction() {
+  var under = investments
+    .filter(function (i) { return kpiOf(i) !== null; })
+    .sort(function (a, b) { return kpiOf(a) - kpiOf(b); });
+
+  var list = under.map(function (i, idx) {
+    var k = kpiOf(i);
+    var hl = k < 100;
+    return '<div class="rank-item">' +
+      '<div class="rank-num"' + (hl ? '' : ' style="background:#EEF0F3;color:#8B8F99"') + '>' + (idx + 1) + '</div>' +
+      '<div class="rank-info"><b>' + i.name + '</b>' +
+      '<span>' + i.code + ' · ' + i.pic + ' · ' + stageBadge(i.stage) + '</span>' +
+      '<div class="rank-bar"><i style="width:' + Math.max(4, Math.min(100, k)) + '%"></i></div></div>' +
+      '<div class="rank-kpi"' + (hl ? '' : ' style="color:#1FA463"') + '>' + k + '%</div></div>';
+  }).join('');
+
+  var rows = investments.filter(function (i) { return i.stage === 'MassPro' || i.stage === 'PCR'; }).map(function (i) {
+    var k = kpiOf(i);
+    var st = statusOf(i);
+    return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
+      '<td><span class="cell-name">' + i.name + '</span><br><span class="cell-sub">' + i.pic + '</span></td>' +
+      '<td>' + stageBadge(i.stage) + '</td>' +
+      '<td class="num">' + (i.rate ? i.rate + '%' : '—') + '</td>' +
+      '<td style="min-width:140px">' + (k !== null ? progressBar(k, k < 100 ? '' : 'green') + '<span class="cell-sub" style="display:block;margin-top:5px">' + k + '%</span>' : '—') + '</td>' +
+      '<td><span class="badge" style="background:' + st.bg + ';color:' + st.color + '">' + st.label + '</span></td></tr>';
+  }).join('');
+
+  $('#page-production').innerHTML =
+    '<div class="grid-2">' +
+    '<div class="card"><h3><span class="accent"></span>Top Underperforming Investments' +
+    '<span class="right">' + under.filter(function (i) { return kpiOf(i) < 100; }).length + ' perlu perbaikan</span></h3>' +
+    '<div class="rank-list">' + list + '</div></div>' +
+    '<div class="card"><h3><span class="accent"></span>Catatan</h3>' +
+    '<p style="font-size:13px;color:var(--muted);line-height:1.7">' +
+    'Data performa produksi &amp; realisasi benefit diambil otomatis dari ERP dan IoT saat tahap MassPro.<br><br>' +
+    '<b style="color:var(--ink)">Variance</b> yang terdeteksi akan langsung memicu <b style="color:var(--ink)">Action Tracker</b> untuk tindakan perbaikan, bukan menunggu review 6 bulanan.' +
+    '</p></div></div>' +
+    '<div class="card"><h3><span class="accent"></span>Detail Produksi per Investasi</h3>' +
+    '<div class="table-wrap"><table class="table"><thead><tr>' +
+    '<th>ID</th><th>Investasi</th><th>Tahap</th><th class="num">Utilisasi</th><th>Realisasi Benefit</th><th>Status</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+}
+
+/* ================= Benefit ================= */
+function renderBenefit() {
+  var rated = investments.filter(function (i) { return kpiOf(i) !== null; });
+  var maxTarget = rated.length ? Math.max.apply(null, rated.map(function (i) { return i.fs_target; })) : 1;
+
+  var chart = rated.map(function (i) {
+    var wT = Math.round((i.fs_target / maxTarget) * 100);
+    var wA = Math.round((i.fs_actual / maxTarget) * 100);
+    return '<div class="chart-group"><h5>' + i.name +
+      ' <small>· ' + i.code + '</small></h5>' +
+      '<div class="bar-line target"><span class="lbl">FS Target</span><div class="bar-track"><i style="width:' + wT + '%"></i></div><span class="val">' + compact(i.fs_target) + '</span></div>' +
+      '<div class="bar-line actual"><span class="lbl">Actual</span><div class="bar-track"><i style="width:' + wA + '%"></i></div><span class="val">' + compact(i.fs_actual) + '</span></div>' +
+      '</div>';
+  }).join('');
+
+  var totalT = rated.reduce(function (s, i) { return s + i.fs_target; }, 0);
+  var totalA = rated.reduce(function (s, i) { return s + i.fs_actual; }, 0);
+  var cap = totalT > 0 ? Math.round((totalA / totalT) * 100) : 0;
+
+  var rows = rated.map(function (i) {
+    var k = kpiOf(i);
+    var delta = i.fs_actual - i.fs_target;
+    var ok = delta >= 0;
+    return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
+      '<td><span class="cell-name">' + i.name + '</span></td>' +
+      '<td class="num">' + compact(i.fs_target) + '</td>' +
+      '<td class="num">' + compact(i.fs_actual) + '</td>' +
+      '<td class="num"><span style="color:' + (ok ? '#1FA463' : '#D2232A') + '">' + (ok ? '+' : '') + compact(delta) + '</span></td>' +
+      '<td><span class="badge" style="background:' + (ok ? '#E3F5EC' : '#FBEAEB') + ';color:' + (ok ? '#1FA463' : '#D2232A') + '">' + k + '%</span></td></tr>';
+  }).join('');
+
+  var kpis = [
+    { label: 'Target Benefit / Bulan', value: compact(totalT), c: '#E8EFFA', fg: '#2F6DB3', icon: ICONS.benefit },
+    { label: 'Realisasi Benefit / Bulan', value: compact(totalA), c: '#E3F5EC', fg: '#1FA463', icon: ICONS.benefit },
+    { label: 'Capaian FS vs Actual', value: cap + '%', c: '#FBEAEB', fg: '#D2232A', icon: ICONS.progress }
+  ];
+
+  $('#page-benefit').innerHTML =
+    '<div class="kpi-grid">' + kpis.map(function (k) {
+      return '<div class="card kpi">' +
+        '<div class="kpi-icon" style="background:' + k.c + ';color:' + k.fg + '">' + k.icon + '</div>' +
+        '<div><p class="kpi-label">' + k.label + '</p><h3 class="kpi-value">' + k.value + '</h3></div></div>';
+    }).join('') + '</div>' +
+    '<div class="grid-2">' +
+    '<div class="card"><h3><span class="accent"></span>Perbandingan FS Target vs Actual' +
+    '<span class="right">per bulan · rupiah</span></h3><div class="chart">' + chart + '</div></div>' +
+    '<div class="card"><h3><span class="accent"></span>Rekap Realisasi</h3>' +
+    '<div class="table-wrap"><table class="table"><thead><tr>' +
+    '<th>ID</th><th>Investasi</th><th class="num">Target</th><th class="num">Actual</th><th class="num">Selisih</th><th>Capaian</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+}
+
+/* ================= Action Tracker ================= */
+function renderAction() {
+  var rows = actions.map(function (a) {
+    var st = ACTION_STATUS[a.status] || ACTION_STATUS.open;
+    var opts = Object.keys(ACTION_STATUS).map(function (k) {
+      return '<option value="' + k + '"' + (k === a.status ? ' selected' : '') + '>' + ACTION_STATUS[k].label + '</option>';
+    }).join('');
+    return '<tr><td><span class="cell-id">' + a.code + '</span><br><span class="cell-sub">' + a.inv_name + '</span></td>' +
+      '<td><span class="cell-name">' + a.action + '</span></td>' +
+      '<td>' + a.owner + '</td>' +
+      '<td class="num">' + a.due_date + '</td>' +
+      '<td><select class="status-select" data-action-id="' + a.id + '" style="color:' + st.color + '">' + opts + '</select></td></tr>';
+  }).join('');
+
+  var open = actions.filter(function (a) { return a.status === 'open'; }).length;
+  var done = actions.filter(function (a) { return a.status === 'done'; }).length;
+
+  var kpis = [
+    { label: 'Total Tindakan', value: actions.length, c: '#FBEAEB', fg: '#D2232A', icon: ICONS.action },
+    { label: 'Masih Terbuka', value: open, c: '#FDF1DF', fg: '#B57A12', icon: ICONS.progress },
+    { label: 'Selesai', value: done, c: '#E3F5EC', fg: '#1FA463', icon: ICONS.executive }
+  ];
+
+  $('#page-action').innerHTML =
+    '<div class="kpi-grid">' + kpis.map(function (k) {
+      return '<div class="card kpi">' +
+        '<div class="kpi-icon" style="background:' + k.c + ';color:' + k.fg + '">' + k.icon + '</div>' +
+        '<div><p class="kpi-label">' + k.label + '</p><h3 class="kpi-value">' + k.value + '</h3></div></div>';
+    }).join('') + '</div>' +
+    '<div class="card"><h3><span class="accent"></span>Daftar Tindakan Perbaikan' +
+    '<span class="right"><button class="btn" id="btnAddAction">' + ICONS.plus + 'Tambah Tindakan</button></span></h3>' +
+    '<div class="table-wrap"><table class="table"><thead><tr>' +
+    '<th>Investasi</th><th>Tindakan</th><th>PIC</th><th class="num">Batas Waktu</th><th>Status</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+
+  $('#btnAddAction').addEventListener('click', showAddAction);
+}
+
+/* ================= Forms ================= */
+function showAddInvestment() {
+  openModal('Tambah Investasi Baru', '' +
+    '<form class="form" id="formInv">' +
+    '<div class="hint">Investasi baru akan masuk dengan status <b>Draft</b> dan menunggu review PB Department.</div>' +
+    '<div class="field"><label>Nama Investasi *</label><input name="name" required placeholder="cth: Modernisasi Mesin Press"></div>' +
+    '<div class="field"><label>PIC (Engineer)</label><input name="pic" placeholder="Nama engineer"></div>' +
+    '<div class="field"><label>Kategori</label><input name="category" placeholder="cth: Mesin &amp; Peralatan"></div>' +
+    '<div class="field"><label>Budget (Rp)</label><input name="budget" type="number" min="0" placeholder="0"></div>' +
+    '<div class="field"><label>Target Benefit / Bulan (Rp)</label><input name="fs_target" type="number" min="0" placeholder="0"></div>' +
+    '<div id="msgInv"></div>' +
+    '<div class="form-actions"><button type="button" class="btn ghost" data-cancel>Batal</button>' +
+    '<button type="submit" class="btn">Simpan</button></div>' +
+    '</form>');
+
+  $('#formInv').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var payload = {
+      name: f.name.value.trim(),
+      pic: f.pic.value.trim() || 'Belum ditentukan',
+      category: f.category.value.trim() || 'Umum',
+      budget: Number(f.budget.value) || 0,
+      fs_target: Number(f.fs_target.value) || 0
+    };
+    apiPost('investments', payload).then(function (res) {
+      if (res.error) return showMsg('msgInv', res.error, true);
+      showMsg('msgInv', 'Berhasil! Kode ' + res.code + ' dibuat.', false);
+      setTimeout(function () { closeModal(); loadData(); }, 700);
+    });
+  });
+}
+
+function showAddAction() {
+  var opts = investments.map(function (i) {
+    return '<option value="' + i.id + '">' + i.code + ' — ' + i.name + '</option>';
+  }).join('') || '<option value="" disabled>Belum ada investasi</option>';
+
+  openModal('Tambah Tindakan Perbaikan', '' +
+    '<form class="form" id="formAction">' +
+    '<div class="field"><label>Investasi *</label><select name="investment_id" required>' + opts + '</select></div>' +
+    '<div class="field"><label>Tindakan *</label><textarea name="action" rows="3" required placeholder="Deskripsi tindakan perbaikan"></textarea></div>' +
+    '<div class="field"><label>PIC</label><input name="owner" placeholder="Nama penanggung jawab"></div>' +
+    '<div class="field"><label>Batas Waktu *</label><input name="due_date" type="date" required></div>' +
+    '<div id="msgAction"></div>' +
+    '<div class="form-actions"><button type="button" class="btn ghost" data-cancel>Batal</button>' +
+    '<button type="submit" class="btn">Simpan</button></div>' +
+    '</form>');
+
+  $('#formAction').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    apiPost('actions', {
+      investment_id: Number(f.investment_id.value),
+      action: f.action.value.trim(),
+      owner: f.owner.value.trim() || 'Belum ditentukan',
+      due_date: f.due_date.value
+    }).then(function (res) {
+      if (res.error) return showMsg('msgAction', res.error, true);
+      showMsg('msgAction', 'Tindakan berhasil ditambahkan.', false);
+      setTimeout(function () { closeModal(); loadData(); }, 700);
+    });
+  });
+}
+
+function showMsg(id, text, isErr) {
+  var el = $('#' + id);
+  el.innerHTML = '<p class="form-msg ' + (isErr ? 'err' : 'ok') + '">' + text + '</p>';
+}
+
+/* ================= Search ================= */
+function initSearch() {
+  $('#searchInput').addEventListener('input', function (e) {
+    var q = e.target.value.trim().toLowerCase();
+    ['page-executive', 'page-progress', 'page-budget'].forEach(function (pid) {
+      var page = $('#' + pid);
+      if (!page) return;
+      page.querySelectorAll('tr, .inv-card').forEach(function (node) {
+        var text = node.textContent.toLowerCase();
+        node.style.display = (!q || text.indexOf(q) >= 0) ? '' : 'none';
+      });
+    });
+  });
+}
+
+/* ================= Events (delegated) ================= */
+function initEvents() {
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-inc],[data-dec]');
+    if (btn) {
+      var inv = investments.find(function (i) { return i.id == btn.dataset.id; });
+      if (!inv) return;
+      var field = btn.dataset.field;
+      var max = Number(btn.dataset.max);
+      var v = Number(inv[field]);
+      v = btn.hasAttribute('data-inc') ? v + 1 : v - 1;
+      v = Math.max(0, Math.min(max, v));
+      if (v === Number(inv[field])) return;
+      var payload = { id: inv.id };
+      payload[field] = v;
+      apiPost('update', payload).then(loadData);
+      return;
+    }
+
+    var cancel = e.target.closest('[data-cancel]');
+    if (cancel) closeModal();
+  });
+
+  document.addEventListener('change', function (e) {
+    var sel = e.target.closest('.status-select');
+    if (sel) {
+      if (sel.classList.contains('stage-select')) {
+        apiPost('update', { id: sel.dataset.id, stage: sel.value }).then(loadData);
+      } else {
+        apiPost('action-status', { id: sel.dataset.actionId, status: sel.value }).then(loadData);
+      }
+    }
+  });
+}
+
+/* ================= Init ================= */
+function renderAll() {
+  renderExecutive();
+  renderProgress();
+  renderBudget();
+  renderProduction();
+  renderBenefit();
+  renderAction();
+  applySearch();
+}
+
+function applySearch() {
+  var q = $('#searchInput').value.trim().toLowerCase();
+  if (!q) return;
+  ['page-executive', 'page-progress', 'page-budget'].forEach(function (pid) {
+    var page = $('#' + pid);
+    if (!page) return;
+    page.querySelectorAll('tr, .inv-card').forEach(function (node) {
+      if (node.textContent.toLowerCase().indexOf(q) < 0) node.style.display = 'none';
+    });
+  });
+}
+
+function init() {
+  buildNav();
+  initEvents();
+  initSearch();
+  loadData();
+}
+
+document.addEventListener('DOMContentLoaded', init);
