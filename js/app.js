@@ -272,6 +272,8 @@ function stageSelect(inv) {
 }
 
 /* ================= Investment Progress ================= */
+var progressFilter = '';
+
 function renderProgress() {
   var counts = {};
   investments.forEach(function (i) { counts[i.stage] = (counts[i.stage] || 0) + 1; });
@@ -281,7 +283,15 @@ function renderProgress() {
     return '<div class="chip"><span class="sw" style="background:' + c.fg + '"></span>' + s + ' <b>' + (counts[s] || 0) + '</b></div>';
   }).join('');
 
-  var cards = investments.map(function (i) {
+  var filterOpts = ['<option value="">Semua Status</option>'].concat(STAGES.map(function (s) {
+    return '<option value="' + s + '"' + (s === progressFilter ? ' selected' : '') + '>' + s + '</option>';
+  })).join('');
+
+  var list = progressFilter
+    ? investments.filter(function (i) { return i.stage === progressFilter; })
+    : investments;
+
+  var cards = list.map(function (i) {
     var pct = Math.round((i.used / i.budget) * 100);
     var st = statusOf(i);
     return '<div class="card inv-card">' +
@@ -301,8 +311,15 @@ function renderProgress() {
   }).join('');
 
   $('#page-progress').innerHTML =
+    '<div class="filter-bar"><span class="filter-lbl">Filter Status</span>' +
+    '<select class="status-select" id="progressFilter">' + filterOpts + '</select></div>' +
     '<div class="chips">' + chips + '</div>' +
-    '<div class="inv-grid">' + cards + '</div>';
+    '<div class="inv-grid">' + (cards || '<div class="card empty-card">Tidak ada investasi dengan status ini.</div>') + '</div>';
+
+  $('#progressFilter').addEventListener('change', function (e) {
+    progressFilter = e.target.value;
+    renderProgress();
+  });
 }
 
 /* ================= Budget Monitoring ================= */
