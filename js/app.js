@@ -356,7 +356,7 @@ function renderBudget() {
       '<td class="num">' + compact(i.used) + '</td>' +
       '<td style="min-width:140px">' + progressBar(pct) + '<span class="cell-sub" style="display:block;margin-top:5px">' + pct + '%</span></td>' +
       '<td><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">' + payDots(i) +
-      stepper(i.id, 'pay_step', i.pay_step + '/5', 5) + '</div></td>' +
+      '<input class="pay-input" type="number" min="0" max="5" value="' + i.pay_step + '" data-pay="' + i.id + '"></div></td>' +
       '<td>' + stageBadge(i.stage) + '</td></tr>';
   }).join('');
 
@@ -698,6 +698,13 @@ function initEvents() {
   });
 
   document.addEventListener('change', function (e) {
+    var pay = e.target.closest('[data-pay]');
+    if (pay) {
+      var v = Math.max(0, Math.min(5, Number(pay.value) || 0));
+      apiPost('update', { id: pay.dataset.pay, pay_step: v }).then(loadData);
+      return;
+    }
+
     var sel = e.target.closest('.status-select');
     if (sel) {
       if (sel.classList.contains('stage-select')) {
