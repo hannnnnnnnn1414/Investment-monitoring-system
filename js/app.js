@@ -393,7 +393,16 @@ function renderBudget() {
       '<td class="num">' + compact(outstanding) + '</td>' +
       '<td><div class="pay-chips">' + payBadges + '</div>' + payHtml + '</td>' +
       '<td><span class="badge" style="background:' + bs.bg + ';color:' + bs.color + '">' + bs.label + '</span></td>' +
-      '<td>' + stageBadge(i.stage) + '</td></tr>';
+      '<td>' + stageBadge(i.stage) + '</td>' +
+      '<td><div class="close-cell">' +
+      '<span class="badge" style="background:' + (i.budget_status === 'closed' ? '#E3F5EC' : '#FDF1DF') + ';color:' + (i.budget_status === 'closed' ? '#1FA463' : '#B57A12') + '">' +
+      (i.budget_status === 'closed' ? 'Budget Tertutup' : 'Budget Terbuka') + '</span>' +
+      (i.budget_status === 'closed'
+        ? '<span class="cell-sub">Ditutup: ' + (i.closed_at ? i.closed_at.slice(0, 10) : '—') + '</span>'
+        : '') +
+      '<button type="button" class="btn small ' + (i.budget_status === 'closed' ? 'ghost' : 'danger') + '" data-close="' + i.id + '" data-action="' + (i.budget_status === 'closed' ? 'open' : 'close') + '">' +
+      (i.budget_status === 'closed' ? 'Buka Kembali' : 'Tutup Budget') + '</button>' +
+      '</div></td></tr>';
   }).join('');
 
   $('#page-budget').innerHTML = kpiHtml +
@@ -412,7 +421,7 @@ function renderBudget() {
     '<div class="card"><h3><span class="accent"></span>Rincian Budget &amp; Progress Pembayaran' +
     '<span class="right">5 milestone: DP · Payment 1–3 · Retention</span></h3>' +
     '<div class="table-wrap"><table class="table"><thead><tr>' +
-    '<th>ID</th><th>Investasi</th><th class="num">Budget</th><th class="num">Realized</th><th class="num">Outstanding</th><th>Realisasi</th><th>Status</th><th>Tahap</th>' +
+    '<th>ID</th><th>Investasi</th><th class="num">Budget</th><th class="num">Realized</th><th class="num">Outstanding</th><th>Realisasi</th><th>Status</th><th>Tahap</th><th>Penutupan</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
 }
 
@@ -753,6 +762,12 @@ function initEvents() {
         payload[inp.dataset.col] = Math.max(0, Number(inp.value) || 0);
       });
       apiPost('update', payload).then(loadData);
+    }
+
+    var closeBtn = e.target.closest('[data-close]');
+    if (closeBtn) {
+      var action = closeBtn.dataset.action === 'close' ? 'closed' : 'open';
+      apiPost('update', { id: closeBtn.dataset.close, budget_status: action }).then(loadData);
     }
   });
 

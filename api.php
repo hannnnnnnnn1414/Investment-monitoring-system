@@ -59,7 +59,7 @@ try {
                 $rows = $pdo
                     ->query('SELECT id, code, name, pic, category, purpose, stage, budget, used,
                                     invest_progress, pay_step, pay_dp, pay_1, pay_2, pay_3, pay_retention,
-                                    fs_target, fs_actual, rate, created_at
+                                    budget_status, closed_at, fs_target, fs_actual, rate, created_at
                              FROM investments ORDER BY id ASC')
                     ->fetchAll();
                 foreach ($rows as &$r) {
@@ -108,6 +108,7 @@ try {
                 $fields = ['invest_progress' => 'invest_progress', 'pay_step' => 'pay_step',
                            'pay_dp' => 'pay_dp', 'pay_1' => 'pay_1', 'pay_2' => 'pay_2',
                            'pay_3' => 'pay_3', 'pay_retention' => 'pay_retention',
+                           'budget_status' => 'budget_status',
                            'used' => 'used', 'rate' => 'rate', 'stage' => 'stage'];
                 $sets = [];
                 $vals = [];
@@ -116,6 +117,11 @@ try {
                         $sets[] = "$col = ?";
                         $vals[] = $in[$k];
                     }
+                }
+                if (isset($in['budget_status']) && $in['budget_status'] === 'closed') {
+                    $sets[] = 'closed_at = NOW()';
+                } elseif (isset($in['budget_status']) && $in['budget_status'] === 'open') {
+                    $sets[] = 'closed_at = NULL';
                 }
                 if (!$sets) {
                     json_out(['error' => 'Tidak ada field yang akan diupdate.'], 422);
