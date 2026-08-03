@@ -21,12 +21,16 @@ const PAGES = [
   { id: 'review',    label: 'Review P&B', icon: 'action' }
 ];
 
-const STAGES = ['Draft', 'Under Review', 'Ready for Approval', 'Approved', 'Rejected', 'Fabrication', 'Install & Trial', 'PCR', 'MassPro'];
+const STAGES = ['Draft', 'Under Review', 'Ready for Approval', 'BOD', 'AOP Analyst', 'BOD AOP', 'Revision Needed', 'Approved', 'Rejected', 'Fabrication', 'Install & Trial', 'PCR', 'MassPro'];
 
 const STAGE_COLOR = {
   'Draft':              { bg: '#EEF0F3', fg: '#6B7280' },
   'Under Review':       { bg: '#FDF1DF', fg: '#B57A12' },
   'Ready for Approval': { bg: '#E8EFFA', fg: '#2F6DB3' },
+  'BOD':                { bg: '#EDE8FB', fg: '#6C4FD1' },
+  'AOP Analyst':        { bg: '#E0F2F9', fg: '#0E7EA6' },
+  'BOD AOP':            { bg: '#E3F5EC', fg: '#1FA463' },
+  'Revision Needed':    { bg: '#FDEAEE', fg: '#CE3E6B' },
   'Approved':           { bg: '#E3F5EC', fg: '#1FA463' },
   'Rejected':           { bg: '#FBEAEB', fg: '#D2232A' },
   'Fabrication':        { bg: '#EDE8FB', fg: '#6C4FD1' },
