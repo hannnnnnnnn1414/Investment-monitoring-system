@@ -426,6 +426,24 @@ body {
 .pay-save { justify-content: center; padding: 7px 12px; font-size: 12px; }
 .pay-save svg { width: 13px; height: 13px; }
 
+.pay-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+.pay-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #EEF0F3;
+  color: #8B8F99;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.pay-chip.paid { background: #E3F5EC; color: #1FA463; }
+
+.legend-col { display: flex; flex-direction: column; gap: 12px; }
+.legend-col .legend-item { font-size: 12.5px; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+.legend-col .legend-item .swatch { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+
+
 .inv-card { padding: 20px; }
 .inv-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .inv-id { font-size: 11px; color: var(--muted); font-weight: 700; }

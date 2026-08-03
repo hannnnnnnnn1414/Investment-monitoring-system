@@ -74,6 +74,17 @@ function kpiOf(inv) {
   return Math.round((inv.fs_actual / inv.fs_target) * 100);
 }
 
+function sumPay(inv) {
+  return Number(inv.pay_dp) + Number(inv.pay_1) + Number(inv.pay_2) + Number(inv.pay_3) + Number(inv.pay_retention);
+}
+
+function budgetStatusOf(inv) {
+  var realized = sumPay(inv);
+  if (realized > inv.budget) return { label: 'Over Budget', color: '#D2232A', bg: '#FBEAEB' };
+  if (realized === inv.budget) return { label: 'On Budget', color: '#1FA463', bg: '#E3F5EC' };
+  return { label: 'Under Budget', color: '#2F6DB3', bg: '#E8EFFA' };
+}
+
 function statusOf(inv) {
   const kpi = kpiOf(inv);
   if (kpi !== null && kpi < 100) return { label: 'Underperforming', color: '#D2232A', bg: '#FBEAEB' };
@@ -320,17 +331,25 @@ function renderProgress() {
 
 /* ================= Budget Monitoring ================= */
 function renderBudget() {
+  var PAYS = [
+    ['DP', 'pay_dp'],
+    ['Payment 1', 'pay_1'],
+    ['Payment 2', 'pay_2'],
+    ['Payment 3', 'pay_3'],
+    ['Retention', 'pay_retention']
+  ];
+
   var totalBudget = investments.reduce(function (s, i) { return s + i.budget; }, 0);
-  var totalUsed = investments.reduce(function (s, i) { return s + i.used; }, 0);
-  var remain = totalBudget - totalUsed;
-  var closed = investments.filter(function (i) { return i.invest_progress >= 100; }).length;
-  var pctUsed = Math.round((totalUsed / totalBudget) * 100);
+  var totalRealized = investments.reduce(function (s, i) { return s + sumPay(i); }, 0);
+  var totalOutstanding = Math.max(0, totalBudget - totalRealized);
+  var overCount = investments.filter(function (i) { return sumPay(i) > i.budget; }).length;
+  var pctRealized = totalBudget > 0 ? Math.round((totalRealized / totalBudget) * 100) : 0;
 
   var kpis = [
     { icon: ICONS.budget, label: 'Total Budget', value: compact(totalBudget), note: 'Seluruh investasi', c: '#FBEAEB', fg: '#D2232A' },
-    { icon: ICONS.budget, label: 'Budget Terpakai', value: compact(totalUsed), note: pctUsed + '% dari total', c: '#E8EFFA', fg: '#2F6DB3' },
-    { icon: ICONS.budget, label: 'Sisa Budget', value: compact(remain), note: 'Belum direalisasi', c: '#E3F5EC', fg: '#1FA463' },
-    { icon: ICONS.executive, label: 'Investasi Tuntas', value: closed, note: 'Progres 100%', c: '#EDE8FB', fg: '#6C4FD1' }
+    { icon: ICONS.budget, label: 'Realized Payment', value: compact(totalRealized), note: pctRealized + '% dari total budget', c: '#E3F5EC', fg: '#1FA463' },
+    { icon: ICONS.budget, label: 'Outstanding Payment', value: compact(totalOutstanding), note: 'Belum dibayar', c: '#E8EFFA', fg: '#2F6DB3' },
+    { icon: ICONS.executive, label: 'Over Budget', value: overCount, note: 'Realisasi melebihi budget', c: '#FDEAEE', fg: '#CE3E6B' }
   ];
 
   var kpiHtml = '<div class="kpi-grid">' + kpis.map(function (k) {
@@ -340,38 +359,60 @@ function renderBudget() {
       '<p class="kpi-note">' + k.note + '</p></div></div>';
   }).join('') + '</div>';
 
+  var chart = investments.map(function (i) {
+    var realized = sumPay(i);
+    var maxV = Math.max(i.budget, realized, 1);
+    var wB = Math.round((i.budget / maxV) * 100);
+    var wR = Math.round((realized / maxV) * 100);
+    return '<div class="chart-group"><h5>' + i.name + ' <small>· ' + i.code + '</small></h5>' +
+      '<div class="bar-line target"><span class="lbl">Budget</span><div class="bar-track"><i style="width:' + wB + '%"></i></div><span class="val">' + compact(i.budget) + '</span></div>' +
+      '<div class="bar-line actual"><span class="lbl">Realized</span><div class="bar-track"><i style="width:' + wR + '%"></i></div><span class="val">' + compact(realized) + '</span></div>' +
+      '</div>';
+  }).join('');
+
   var rows = investments.map(function (i) {
-    var pct = Math.round((i.used / i.budget) * 100);
-    var pays = [
-      ['DP', 'pay_dp'],
-      ['Payment 1', 'pay_1'],
-      ['Payment 2', 'pay_2'],
-      ['Payment 3', 'pay_3'],
-      ['Retention', 'pay_retention']
-    ];
-    var payTotal = pays.reduce(function (s, p) { return s + Number(i[p[1]]); }, 0);
+    var realized = sumPay(i);
+    var outstanding = Math.max(0, i.budget - realized);
+    var bs = budgetStatusOf(i);
+    var payBadges = PAYS.map(function (p) {
+      var paid = Number(i[p[1]]) > 0;
+      return '<span class="pay-chip' + (paid ? ' paid' : '') + '" title="' + p[0] + ': ' + rupiah(Number(i[p[1]])) + '">' + p[0] + '</span>';
+    }).join('');
     var payHtml = '<div class="pay-box">' +
-      '<div class="pay-list">' + pays.map(function (p) {
+      '<div class="pay-list">' + PAYS.map(function (p) {
         return '<div class="pay-row"><span>' + p[0] + '</span>' +
           '<div class="pay-input-wrap"><em>Rp</em><input class="pay-input" type="number" min="0" step="0.01" value="' +
           Number(i[p[1]]) + '" data-pay="' + i.id + '" data-col="' + p[1] + '"></div></div>';
-      }).join('') + '<div class="pay-total"><span>Total</span><b class="pay-total-val">' + compact(payTotal) + '</b></div></div>' +
+      }).join('') + '<div class="pay-total"><span>Total</span><b class="pay-total-val">' + compact(realized) + '</b></div></div>' +
       '<button type="button" class="btn ghost pay-save" data-pay-save="' + i.id + '">' + ICONS.plus + 'Simpan</button>' +
       '</div>';
     return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
       '<td><span class="cell-name">' + i.name + '</span><br><span class="cell-sub">' + i.pic + '</span></td>' +
       '<td class="num">' + compact(i.budget) + '</td>' +
-      '<td class="num">' + compact(i.used) + '</td>' +
-      '<td style="min-width:140px">' + progressBar(pct) + '<span class="cell-sub" style="display:block;margin-top:5px">' + pct + '%</span></td>' +
-      '<td>' + payHtml + '</td>' +
+      '<td class="num">' + compact(realized) + '</td>' +
+      '<td class="num">' + compact(outstanding) + '</td>' +
+      '<td><div class="pay-chips">' + payBadges + '</div>' + payHtml + '</td>' +
+      '<td><span class="badge" style="background:' + bs.bg + ';color:' + bs.color + '">' + bs.label + '</span></td>' +
       '<td>' + stageBadge(i.stage) + '</td></tr>';
   }).join('');
 
   $('#page-budget').innerHTML = kpiHtml +
+    '<div class="grid-2">' +
+    '<div class="card"><h3><span class="accent"></span>Budget vs Realized' +
+    '<span class="right">per investasi</span></h3><div class="chart">' + chart + '</div></div>' +
+    '<div class="card"><h3><span class="accent"></span>Keterangan Status' +
+    '<span class="right">Realisasi vs Budget</span></h3>' +
+    '<div class="legend-col">' +
+    '<div class="legend-item"><span class="swatch" style="background:#C7CBD1"></span>Budget (target)</div>' +
+    '<div class="legend-item"><span class="swatch" style="background:linear-gradient(90deg,#E33D48,var(--red-dark))"></span>Realized (dibayar)</div>' +
+    '<div class="legend-item"><span class="swatch" style="background:#FBEAEB"></span>Over Budget — realisasi &gt; budget</div>' +
+    '<div class="legend-item"><span class="swatch" style="background:#E3F5EC"></span>On Budget — realisasi = budget</div>' +
+    '<div class="legend-item"><span class="swatch" style="background:#E8EFFA"></span>Under Budget — realisasi &lt; budget</div>' +
+    '</div></div></div>' +
     '<div class="card"><h3><span class="accent"></span>Rincian Budget &amp; Progress Pembayaran' +
     '<span class="right">5 milestone: DP · Payment 1–3 · Retention</span></h3>' +
     '<div class="table-wrap"><table class="table"><thead><tr>' +
-    '<th>ID</th><th>Investasi</th><th class="num">Budget</th><th class="num">Terpakai</th><th>Penyerapan</th><th>Pembayaran</th><th>Tahap</th>' +
+    '<th>ID</th><th>Investasi</th><th class="num">Budget</th><th class="num">Realized</th><th class="num">Outstanding</th><th>Realisasi</th><th>Status</th><th>Tahap</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
 }
 
