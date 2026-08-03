@@ -422,6 +422,9 @@ body {
 .pay-total { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding-top: 6px; border-top: 1px dashed var(--line); margin-top: 2px; }
 .pay-total span { color: var(--muted); }
 .pay-total b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.pay-box { display: flex; flex-direction: column; gap: 10px; min-width: 170px; }
+.pay-save { justify-content: center; padding: 7px 12px; font-size: 12px; }
+.pay-save svg { width: 13px; height: 13px; }
 
 .inv-card { padding: 20px; }
 .inv-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }

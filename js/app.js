@@ -350,11 +350,14 @@ function renderBudget() {
       ['Retention', 'pay_retention']
     ];
     var payTotal = pays.reduce(function (s, p) { return s + Number(i[p[1]]); }, 0);
-    var payHtml = '<div class="pay-list">' + pays.map(function (p) {
-      return '<div class="pay-row"><span>' + p[0] + '</span>' +
-        '<div class="pay-input-wrap"><em>Rp</em><input class="pay-input" type="number" min="0" step="0.01" value="' +
-        Number(i[p[1]]) + '" data-pay="' + i.id + '" data-col="' + p[1] + '"></div></div>';
-    }).join('') + '<div class="pay-total"><span>Total</span><b>' + compact(payTotal) + '</b></div></div>';
+    var payHtml = '<div class="pay-box">' +
+      '<div class="pay-list">' + pays.map(function (p) {
+        return '<div class="pay-row"><span>' + p[0] + '</span>' +
+          '<div class="pay-input-wrap"><em>Rp</em><input class="pay-input" type="number" min="0" step="0.01" value="' +
+          Number(i[p[1]]) + '" data-pay="' + i.id + '" data-col="' + p[1] + '"></div></div>';
+      }).join('') + '<div class="pay-total"><span>Total</span><b class="pay-total-val">' + compact(payTotal) + '</b></div></div>' +
+      '<button type="button" class="btn ghost pay-save" data-pay-save="' + i.id + '">' + ICONS.plus + 'Simpan</button>' +
+      '</div>';
     return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
       '<td><span class="cell-name">' + i.name + '</span><br><span class="cell-sub">' + i.pic + '</span></td>' +
       '<td class="num">' + compact(i.budget) + '</td>' +
@@ -699,18 +702,32 @@ function initEvents() {
 
     var detail = e.target.closest('[data-detail]');
     if (detail) showReviewDetail(detail.dataset.detail);
+
+    var savePay = e.target.closest('[data-pay-save]');
+    if (savePay) {
+      var id = savePay.dataset.paySave;
+      var box = savePay.closest('.pay-box');
+      var payload = { id: id };
+      box.querySelectorAll('[data-pay]').forEach(function (inp) {
+        payload[inp.dataset.col] = Math.max(0, Number(inp.value) || 0);
+      });
+      apiPost('update', payload).then(loadData);
+    }
+  });
+
+  document.addEventListener('input', function (e) {
+    var inp = e.target.closest('[data-pay]');
+    if (!inp) return;
+    var box = inp.closest('.pay-box');
+    var total = 0;
+    box.querySelectorAll('[data-pay]').forEach(function (el) {
+      total += Number(el.value) || 0;
+    });
+    var val = box.querySelector('.pay-total-val');
+    if (val) val.textContent = compact(total);
   });
 
   document.addEventListener('change', function (e) {
-    var pay = e.target.closest('[data-pay]');
-    if (pay) {
-      var v = Math.max(0, Number(pay.value) || 0);
-      var payload = { id: pay.dataset.pay };
-      payload[pay.dataset.col] = v;
-      apiPost('update', payload).then(loadData);
-      return;
-    }
-
     var sel = e.target.closest('.status-select');
     if (sel) {
       if (sel.classList.contains('stage-select')) {
