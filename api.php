@@ -58,7 +58,7 @@ try {
             if ($method === 'GET') {
                 $rows = $pdo
                     ->query('SELECT id, code, name, pic, category, purpose, stage, budget, used,
-                                    invest_progress, pay_step, fs_target, fs_actual, rate
+                                    invest_progress, pay_step, fs_target, fs_actual, rate, created_at
                              FROM investments ORDER BY id ASC')
                     ->fetchAll();
                 foreach ($rows as &$r) {

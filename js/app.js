@@ -17,16 +17,18 @@ const PAGES = [
   { id: 'budget',    label: 'Budget Monitoring', icon: 'budget' },
   { id: 'production',label: 'Production Performance', icon: 'production' },
   { id: 'benefit',   label: 'Benefit Dashboard', icon: 'benefit' },
-  { id: 'action',    label: 'Action Tracker', icon: 'action' }
+  { id: 'action',    label: 'Action Tracker', icon: 'action' },
+  { id: 'review',    label: 'Review P&B', icon: 'action' }
 ];
 
-const STAGES = ['Draft', 'Under Review', 'Ready for Approval', 'Approved', 'Fabrication', 'Install & Trial', 'PCR', 'MassPro'];
+const STAGES = ['Draft', 'Under Review', 'Ready for Approval', 'Approved', 'Rejected', 'Fabrication', 'Install & Trial', 'PCR', 'MassPro'];
 
 const STAGE_COLOR = {
   'Draft':              { bg: '#EEF0F3', fg: '#6B7280' },
   'Under Review':       { bg: '#FDF1DF', fg: '#B57A12' },
   'Ready for Approval': { bg: '#E8EFFA', fg: '#2F6DB3' },
   'Approved':           { bg: '#E3F5EC', fg: '#1FA463' },
+  'Rejected':           { bg: '#FBEAEB', fg: '#D2232A' },
   'Fabrication':        { bg: '#EDE8FB', fg: '#6C4FD1' },
   'Install & Trial':    { bg: '#FDEAEE', fg: '#CE3E6B' },
   'PCR':                { bg: '#FDF1DF', fg: '#B57A12' },
@@ -479,6 +481,81 @@ function renderAction() {
   $('#btnAddAction').addEventListener('click', showAddAction);
 }
 
+/* ================= Review P&B ================= */
+function renderReview() {
+  var drafts = investments.filter(function (i) { return i.stage === 'Draft'; });
+  var others = investments.length - drafts.length;
+
+  var rows = drafts.map(function (i) {
+    var date = i.created_at ? i.created_at.slice(0, 10) : '—';
+    return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
+      '<td><span class="cell-name">' + i.name + '</span><br><span class="cell-sub">PIC: ' + i.pic + '</span></td>' +
+      '<td>' + i.purpose + '</td>' +
+      '<td>' + stageBadge(i.stage) + '</td>' +
+      '<td class="num">' + compact(i.budget) + '</td>' +
+      '<td class="num">' + date + '</td>' +
+      '<td><button class="btn ghost" data-detail="' + i.id + '">' + ICONS.executive + 'Detail</button></td></tr>';
+  }).join('');
+
+  var kpis = [
+    { label: 'Menunggu Review', value: drafts.length, note: 'Diisi oleh ENG · menunggu P&amp;B', c: '#FDF1DF', fg: '#B57A12', icon: ICONS.progress },
+    { label: 'Sudah Direview', value: others, note: 'Melanjutkan ke tahap berikutnya', c: '#E3F5EC', fg: '#1FA463', icon: ICONS.executive }
+  ];
+
+  $('#page-review').innerHTML =
+    '<div class="kpi-grid">' + kpis.map(function (k) {
+      return '<div class="card kpi">' +
+        '<div class="kpi-icon" style="background:' + k.c + ';color:' + k.fg + '">' + k.icon + '</div>' +
+        '<div><p class="kpi-label">' + k.label + '</p><h3 class="kpi-value">' + k.value + '</h3>' +
+        '<p class="kpi-note">' + k.note + '</p></div></div>';
+    }).join('') + '</div>' +
+    '<div class="card"><h3><span class="accent"></span>Daftar Pengajuan Perlu Review' +
+    '<span class="right">Data diisi oleh Engineering Dept.</span></h3>' +
+    '<div class="table-wrap"><table class="table"><thead><tr>' +
+    '<th>ID</th><th>Investasi</th><th>Tujuan</th><th>Tahap</th><th class="num">Budget</th><th class="num">Tanggal</th><th></th>' +
+    '</tr></thead><tbody>' + (rows || '<tr><td colspan="7" class="empty">Tidak ada pengajuan yang menunggu review.</td></tr>') +
+    '</tbody></table></div></div>';
+}
+
+function showReviewDetail(id) {
+  var i = investments.find(function (x) { return x.id == id; });
+  if (!i) return;
+
+  var date = i.created_at ? i.created_at.slice(0, 10) : '—';
+  openModal('Detail Pengajuan · ' + i.code, '' +
+    '<div class="hint">Pengajuan ini diisi oleh <b>Engineering Dept.</b> dan menunggu review <b>Planning &amp; Budgeting Dept.</b></div>' +
+    '<div class="kv">' +
+    '<div class="kv-row"><span>Nama Investasi</span><b>' + i.name + '</b></div>' +
+    '<div class="kv-row"><span>Tujuan Investment</span><b>' + i.purpose + '</b></div>' +
+    '<div class="kv-row"><span>Kategori</span><b>' + i.category + '</b></div>' +
+    '<div class="kv-row"><span>PIC (Engineer)</span><b>' + i.pic + '</b></div>' +
+    '<div class="kv-row"><span>Budget</span><b>' + rupiah(i.budget) + '</b></div>' +
+    '<div class="kv-row"><span>Target Benefit / Bulan</span><b>' + rupiah(i.fs_target) + '</b></div>' +
+    '<div class="kv-row"><span>Tahap Saat Ini</span><b>' + stageBadge(i.stage) + '</b></div>' +
+    '<div class="kv-row"><span>Tanggal Pengajuan</span><b>' + date + '</b></div>' +
+    '</div>' +
+    '<div class="form-actions" style="margin-top:16px">' +
+    '<button type="button" class="btn ghost danger" id="btnReviewReject">Disapprove</button>' +
+    '<button type="button" class="btn" id="btnReviewApprove">Approve</button>' +
+    '</div>');
+
+  $('#btnReviewApprove').addEventListener('click', function () {
+    apiPost('update', { id: i.id, stage: 'Approved' }).then(function (res) {
+      if (res.error) return showMsg('modalBody', res.error, true);
+      closeModal();
+      loadData();
+    });
+  });
+
+  $('#btnReviewReject').addEventListener('click', function () {
+    apiPost('update', { id: i.id, stage: 'Rejected' }).then(function (res) {
+      if (res.error) return showMsg('modalBody', res.error, true);
+      closeModal();
+      loadData();
+    });
+  });
+}
+
 /* ================= Forms ================= */
 function showAddInvestment() {
   openModal('Tambah Investasi Baru', '' +
@@ -594,6 +671,9 @@ function initEvents() {
 
     var cancel = e.target.closest('[data-cancel]');
     if (cancel) closeModal();
+
+    var detail = e.target.closest('[data-detail]');
+    if (detail) showReviewDetail(detail.dataset.detail);
   });
 
   document.addEventListener('change', function (e) {
@@ -616,6 +696,7 @@ function renderAll() {
   renderProduction();
   renderBenefit();
   renderAction();
+  renderReview();
   applySearch();
 }
 

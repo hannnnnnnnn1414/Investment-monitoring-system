@@ -499,6 +499,8 @@ body {
   border: 1px solid var(--line);
 }
 .btn.ghost:hover { border-color: rgba(210, 35, 42, .35); color: var(--red); box-shadow: var(--shadow); }
+.btn.danger { background: #fff; color: var(--red); box-shadow: none; border: 1px solid rgba(210, 35, 42, .4); }
+.btn.danger:hover { background: var(--red-soft); border-color: var(--red); transform: translateY(-1px); }
 .btn svg { width: 15px; height: 15px; }
 
 /* ================= Stepper ================= */
@@ -581,6 +583,23 @@ body {
 .modal-close { background: none; border: none; font-size: 22px; color: var(--muted); cursor: pointer; line-height: 1; }
 .modal-close:hover { color: var(--red); }
 .modal-body { padding: 22px; }
+
+/* ================= Detail key-value ================= */
+.kv { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.kv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.kv-row:last-child { border-bottom: none; }
+.kv-row:nth-child(even) { background: #FBFBFC; }
+.kv-row span { font-size: 12px; color: var(--muted); }
+.kv-row b { font-size: 13px; color: var(--ink); text-align: right; }
+.table td.empty { text-align: center; color: var(--muted); padding: 30px; }
 
 /* ================= Scrollbar ================= */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
