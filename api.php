@@ -57,7 +57,7 @@ try {
         case 'investments':
             if ($method === 'GET') {
                 $rows = $pdo
-                    ->query('SELECT id, code, name, pic, category, stage, budget, used,
+                    ->query('SELECT id, code, name, pic, category, purpose, stage, budget, used,
                                     invest_progress, pay_step, fs_target, fs_actual, rate
                              FROM investments ORDER BY id ASC')
                     ->fetchAll();
@@ -76,6 +76,7 @@ try {
 
                 $budget = (float) ($in['budget'] ?? 0);
                 $fsTarget = (float) ($in['fs_target'] ?? 0);
+                $purpose = $in['purpose'] ?? 'Umum';
 
                 // Auto-generate kode berikutnya: INV-011, INV-012, ...
                 $st = $pdo->query("SELECT MAX(CAST(SUBSTRING(code, 5) AS UNSIGNED)) AS mx
@@ -84,10 +85,10 @@ try {
                 $code = 'INV-' . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
 
                 $st = $pdo->prepare(
-                    'INSERT INTO investments (code, name, pic, category, stage, budget, fs_target)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO investments (code, name, pic, category, purpose, stage, budget, fs_target)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
                 );
-                $st->execute([$code, $in['name'], $in['pic'], $in['category'], 'Draft', $budget, $fsTarget]);
+                $st->execute([$code, $in['name'], $in['pic'], $in['category'], $purpose, 'Draft', $budget, $fsTarget]);
 
                 json_out(['ok' => true, 'id' => (int) $pdo->lastInsertId(), 'code' => $code], 201);
             }

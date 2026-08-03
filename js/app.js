@@ -485,6 +485,14 @@ function showAddInvestment() {
     '<form class="form" id="formInv">' +
     '<div class="hint">Investasi baru akan masuk dengan status <b>Draft</b> dan menunggu review PB Department.</div>' +
     '<div class="field"><label>Nama Investasi *</label><input name="name" required placeholder="cth: Modernisasi Mesin Press"></div>' +
+    '<div class="field"><label>Tujuan Investment *</label><select name="purpose" required>' +
+    '<option value="" disabled selected>Pilih tujuan</option>' +
+    '<option>New Model</option>' +
+    '<option>Quality Improvement</option>' +
+    '<option>Automation</option>' +
+    '<option>Replacement</option>' +
+    '<option>Quality Machine</option>' +
+    '</select></div>' +
     '<div class="field"><label>PIC (Engineer)</label><input name="pic" placeholder="Nama engineer"></div>' +
     '<div class="field"><label>Kategori</label><input name="category" placeholder="cth: Mesin &amp; Peralatan"></div>' +
     '<div class="field"><label>Budget (Rp)</label><input name="budget" type="number" min="0" placeholder="0"></div>' +
@@ -499,6 +507,7 @@ function showAddInvestment() {
     var f = e.target;
     var payload = {
       name: f.name.value.trim(),
+      purpose: f.purpose.value,
       pic: f.pic.value.trim() || 'Belum ditentukan',
       category: f.category.value.trim() || 'Umum',
       budget: Number(f.budget.value) || 0,
