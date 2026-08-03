@@ -39,8 +39,6 @@ const STAGE_COLOR = {
   'MassPro':            { bg: '#FBEAEB', fg: '#D2232A' }
 };
 
-const PAY_MILESTONES = ['DP', 'Payment 1', 'Payment 2', 'Payment 3', 'Retention'];
-
 const ACTION_STATUS = {
   'open':        { label: 'Open', color: '#D2232A' },
   'in-progress': { label: 'In Progress', color: '#F2A33C' },
@@ -82,12 +80,6 @@ function statusOf(inv) {
   if (kpi !== null && kpi >= 100) return { label: 'On Track', color: '#1FA463', bg: '#E3F5EC' };
   if (inv.stage === 'MassPro' || inv.stage === 'PCR') return { label: 'Belum Dinilai', color: '#F2A33C', bg: '#FDF1DF' };
   return { label: 'Berjalan', color: '#2F6DB3', bg: '#E8EFFA' };
-}
-
-function payDots(inv) {
-  return '<div class="pay-dots">' + PAY_MILESTONES.map(function (_, i) {
-    return '<span class="pay-dot' + (i < inv.pay_step ? ' on' : '') + '" title="' + PAY_MILESTONES[i] + '"></span>';
-  }).join('') + '</div>';
 }
 
 function progressBar(pct, cls) {
@@ -350,13 +342,25 @@ function renderBudget() {
 
   var rows = investments.map(function (i) {
     var pct = Math.round((i.used / i.budget) * 100);
+    var pays = [
+      ['DP', 'pay_dp'],
+      ['Payment 1', 'pay_1'],
+      ['Payment 2', 'pay_2'],
+      ['Payment 3', 'pay_3'],
+      ['Retention', 'pay_retention']
+    ];
+    var payTotal = pays.reduce(function (s, p) { return s + Number(i[p[1]]); }, 0);
+    var payHtml = '<div class="pay-list">' + pays.map(function (p) {
+      return '<div class="pay-row"><span>' + p[0] + '</span>' +
+        '<div class="pay-input-wrap"><em>Rp</em><input class="pay-input" type="number" min="0" step="0.01" value="' +
+        Number(i[p[1]]) + '" data-pay="' + i.id + '" data-col="' + p[1] + '"></div></div>';
+    }).join('') + '<div class="pay-total"><span>Total</span><b>' + compact(payTotal) + '</b></div></div>';
     return '<tr><td><span class="cell-id">' + i.code + '</span></td>' +
       '<td><span class="cell-name">' + i.name + '</span><br><span class="cell-sub">' + i.pic + '</span></td>' +
       '<td class="num">' + compact(i.budget) + '</td>' +
       '<td class="num">' + compact(i.used) + '</td>' +
       '<td style="min-width:140px">' + progressBar(pct) + '<span class="cell-sub" style="display:block;margin-top:5px">' + pct + '%</span></td>' +
-      '<td><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">' + payDots(i) +
-      '<input class="pay-input" type="number" min="0" max="5" value="' + i.pay_step + '" data-pay="' + i.id + '"></div></td>' +
+      '<td>' + payHtml + '</td>' +
       '<td>' + stageBadge(i.stage) + '</td></tr>';
   }).join('');
 
@@ -700,8 +704,10 @@ function initEvents() {
   document.addEventListener('change', function (e) {
     var pay = e.target.closest('[data-pay]');
     if (pay) {
-      var v = Math.max(0, Math.min(5, Number(pay.value) || 0));
-      apiPost('update', { id: pay.dataset.pay, pay_step: v }).then(loadData);
+      var v = Math.max(0, Number(pay.value) || 0);
+      var payload = { id: pay.dataset.pay };
+      payload[pay.dataset.col] = v;
+      apiPost('update', payload).then(loadData);
       return;
     }
 

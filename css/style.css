@@ -393,18 +393,35 @@ body {
 .filter-lbl { font-size: 12px; color: var(--muted); font-weight: 600; }
 .empty-card { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 13px; padding: 40px; }
 
-.pay-input {
-  width: 72px;
-  padding: 7px 10px;
+.pay-list { display: flex; flex-direction: column; gap: 5px; min-width: 170px; }
+.pay-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.pay-row span { width: 76px; text-align: right; flex: none; }
+.pay-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #FBFBFC;
   border: 1px solid var(--line);
   border-radius: 10px;
-  font-size: 13px;
+  padding: 0 8px;
+  flex: 1;
+}
+.pay-input-wrap em { font-style: normal; font-size: 11px; color: var(--muted); }
+.pay-input {
+  width: 100%;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
   font-family: inherit;
-  background: #FBFBFC;
   color: var(--ink);
   outline: none;
+  font-variant-numeric: tabular-nums;
 }
-.pay-input:focus { border-color: var(--red); background: #fff; }
+.pay-input:focus { background: #fff; }
+.pay-total { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding-top: 6px; border-top: 1px dashed var(--line); margin-top: 2px; }
+.pay-total span { color: var(--muted); }
+.pay-total b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
 .inv-card { padding: 20px; }
 .inv-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }

@@ -58,12 +58,18 @@ try {
             if ($method === 'GET') {
                 $rows = $pdo
                     ->query('SELECT id, code, name, pic, category, purpose, stage, budget, used,
-                                    invest_progress, pay_step, fs_target, fs_actual, rate, created_at
+                                    invest_progress, pay_step, pay_dp, pay_1, pay_2, pay_3, pay_retention,
+                                    fs_target, fs_actual, rate, created_at
                              FROM investments ORDER BY id ASC')
                     ->fetchAll();
                 foreach ($rows as &$r) {
                     $r['budget']       = (float) $r['budget'];
                     $r['used']         = (float) $r['used'];
+                    $r['pay_dp']       = (float) $r['pay_dp'];
+                    $r['pay_1']        = (float) $r['pay_1'];
+                    $r['pay_2']        = (float) $r['pay_2'];
+                    $r['pay_3']        = (float) $r['pay_3'];
+                    $r['pay_retention']= (float) $r['pay_retention'];
                     $r['fs_target']    = (float) $r['fs_target'];
                     $r['fs_actual']    = (float) $r['fs_actual'];
                 }
@@ -100,6 +106,8 @@ try {
                 required($in, ['id'], 'update');
 
                 $fields = ['invest_progress' => 'invest_progress', 'pay_step' => 'pay_step',
+                           'pay_dp' => 'pay_dp', 'pay_1' => 'pay_1', 'pay_2' => 'pay_2',
+                           'pay_3' => 'pay_3', 'pay_retention' => 'pay_retention',
                            'used' => 'used', 'rate' => 'rate', 'stage' => 'stage'];
                 $sets = [];
                 $vals = [];
